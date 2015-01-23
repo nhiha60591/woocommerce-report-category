@@ -7,8 +7,8 @@
  */
 /*
 Plugin Name: Woocommerce Report Categories
-Plugin URI: https://github.com/nhiha60591/izweb-import/
-Description: Import File from zip file
+Plugin URI: https://github.com/nhiha60591/woocommerce-report-category
+Description: Report Sale by categories
 Version: 1.0.1
 Author: Huu Hien
 Author URI: https://github.com/nhiha60591
@@ -32,7 +32,7 @@ if ( ! class_exists( 'IZW_Report' ) ) :
         }
         function add_report_tab( $reports ){
             $reports['category'] = array(
-                'title'  => __( 'Sale Categories', 'woocommerce' ),
+                'title'  => __( 'Sale by Categories', 'woocommerce' ),
                 'reports' => array(
                     "categories" => array(
                         'title'       => __( 'Sale Categories', 'woocommerce' ),

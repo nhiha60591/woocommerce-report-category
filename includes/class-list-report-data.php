@@ -14,29 +14,6 @@ if ( ! class_exists( 'WP_List_Table' ) ) {
 }
 class IZW_Report_Data extends WP_List_Table{
 
-    /** ************************************************************************
-     * Normally we would be querying data from a database and manipulating that
-     * for use in your list table. For this example, we're going to simplify it
-     * slightly and create a pre-built array. Think of this as the data that might
-     * be returned by $wpdb->query().
-     *
-     * @var array
-     **************************************************************************/
-    var $example_data = array(
-        array(
-            'ID'                => 1, //Render a checkbox instead of text
-            'name'              => 'Name',
-            'email'             => 'nhiha60591@gmail.com',
-            'phone'             => '01649 787 224',
-            'promoter'          => 'T-Shirt',
-            'booking_type'      => 'Jean',
-            'payments'          => 100,
-            'remaining'         => 200,
-            'start_date'        => '2014-08-01',
-            'end_date'          => '2014-09-15',
-        ),
-    );
-
 
     /** ************************************************************************
      * REQUIRED. Set up a constructor that references the parent constructor. We
@@ -85,15 +62,14 @@ class IZW_Report_Data extends WP_List_Table{
     function column_ID($item){
         //Return the Booking ID contents
         return sprintf('<a href="%1$s"><strong>#%2$s</strong></a>',
-            /*$1%s*/ get_the_permalink( $item['ID'] ),
+            /*$1%s*/ add_query_arg( array( 'post' => $item['ID'], 'action' => 'edit'), admin_url( 'post.php') ),
             /*$2%s*/ $item['ID']
         );
     }
     function column_name($item){
 
-        return sprintf('<a href="%1$s"><strong>%2$s</strong></a>',
-            /*$1%s*/ get_the_permalink( $item['ID'] ),
-            /*$2%s*/ $item['name']
+        return sprintf('%1$s',
+            /*$1%s*/ $item['name']
         );
     }
     function column_email($item){
@@ -231,44 +207,91 @@ class IZW_Report_Data extends WP_List_Table{
          * be able to use your precisely-queried data immediately.
          */
         $data = array();
+        $booking_args = array(
+            'post_type' => 'wc_booking',
+            'posts_per_page' => -1
+        );
         if( isset( $_REQUEST['izw_search'])){
-            $data = $this->example_data;
-            print_r( $_REQUEST );
-        }else {
-            $orderargs = array(
-                'post_type' => 'shop_order',
-                'posts_per_page' => -1,
-                'post_status' => array('wc-pending', 'wc-processing', 'wc-on-hold', 'wc-completed', 'wc-cancelled', 'wc-refunded', 'wc-failed')
-            );
-            $order_data = new WP_Query($orderargs);
-            if ($order_data->have_posts()) {
-                foreach ($order_data->posts as $orderitem) {
-                    $order = new WC_Order($orderitem->ID);
-                    $promoter = wp_get_post_terms($orderitem->ID, 'promoter');
-                    $booking = '';
-                    foreach ($order->get_items() as $item) {
-                        $product = get_post($item['product_id']);
-                        $booking .= '<a href="' . get_the_permalink($item['product_id']) . '">' . $product->post_title . '</a>';
-                    }
-                    if (is_wp_error($promoter)) {
-                        $promoter = '<strong>' . $promoter->get_error_message() . '</strong>';
-                    }
-                    $data[] = array(
-                        'ID' => $orderitem->ID, //Render a checkbox instead of text
-                        'name' => $order->billing_first_name . " " . $order->billing_last_name,
-                        'email' => $order->billing_email,
-                        'phone' => $order->billing_phone,
-                        'promoter' => $promoter,
-                        'booking_type' => $booking,
-                        'payments' => $order->get_subtotal(),
-                        'remaining' => $order->get_total(),
-                        'start_date' => $orderitem->post_date,
-                        'end_date' => '2014-09-15',
-                    );
-                }
+            $this->product_ids = array();
+            if ( isset( $_GET['izw_search_key'] ) && is_array( $_GET['izw_search_key'] ) ) {
+                $this->show_categories = array_map( 'absint', $_GET['izw_search_key'] );
+            } elseif ( isset( $_GET['izw_search_key'] ) ) {
+                $this->show_categories = array( absint( $_GET['izw_search_key'] ) );
             }
-            wp_reset_postdata();
+            if( sizeof( $this->show_categories ) ) {
+                foreach ($this->show_categories as $category) {
+                    $category = get_term($category, 'product_cat');
+                    $product_id = get_objects_in_term($category->term_id, 'product_cat');
+                    if (!empty($product_id) && is_array($product_id) && sizeof($product_id)) {
+                        foreach ($product_id as $id) {
+                            $this->product_ids[] = $id;
+                        }
+                        $this->product_ids = array_unique($this->product_ids);
+                    }
+                }
+                $booking_args = array(
+                    'post_type' => 'wc_booking',
+                    'posts_per_page' => -1,
+                    'meta_query' => array(
+                        array(
+                            'key' => '_booking_product_id',
+                            'value' => $this->product_ids,
+                            'compare' => 'IN'
+                        )
+                    )
+                );
+            }else{
+                $booking_args = array(
+                    'post_type' => 'wc_booking',
+                    'posts_per_page' => -1,
+                    'meta_query' => array(
+                        array(
+                            'key' => '_booking_product_id',
+                            'value' => array(0),
+                            'compare' => 'IN'
+                        )
+                    )
+                );
+            }
         }
+        $booking_args = apply_filters( 'izw_report_booking_args', $booking_args, $this );
+
+        $bookingdata = new WP_Query( $booking_args );
+        if ($bookingdata->have_posts()) {
+            while ($bookingdata->have_posts()) {
+                $bookingdata->the_post();
+                global $post;
+                $user = get_user_by( 'id', $post->post_author );
+                $product_id = get_post_meta( get_the_ID(), '_booking_product_id', true );
+                $productData = new WC_Product( $product_id );
+                $promoter = wp_get_post_terms( $product_id, 'product_cat');
+                if (is_wp_error($promoter)) {
+                    $promoter_string = '<strong>' . $promoter->get_error_message() . '</strong>';
+                }else{
+                    $promoter_string = '<ul class="list-promoter">';
+                    foreach( $promoter as $term){
+                        $promoter_string .= '<li><a href="'.add_query_arg( array('action' => 'edit', 'taxonomy'=> 'product_cat', 'tag_ID' => $term->term_id, 'post_type'=>'product' ),admin_url('edit-tags.php')).'"><strong>'.$term->name.'</strong></a></li>';
+                    }
+                    $promoter_string .= '</ul>';
+                }
+                $promoter_string = apply_filters( 'izw_report_booking_promoter_string', $promoter_string, $promoter, $product_id );
+
+
+                $data[] = array(
+                    'ID' => get_the_ID(), //Render a checkbox instead of text
+                    'name' => '<a href="'.add_query_arg( array( 'user_id' => $post->post_author ), admin_url('user-edit.php') ).'"><strong>'. $user->first_name . " " . $user->last_name. '</strong></a>',
+                    'email' => $user->user_email,
+                    'phone' => get_user_meta( $post->post_author, 'billing_phone', true),
+                    'promoter' => $promoter_string,
+                    'booking_type' => '<a href="'.add_query_arg( array('post' => $product_id, 'action'=> 'edit' ),admin_url('post.php')).'">'. $productData->get_title(). '</a>',
+                    'payments' => $productData->get_price(),
+                    'remaining' => '',
+                    'start_date' => get_post_meta( get_the_ID(), '_booking_start', true ),
+                    'end_date' => get_post_meta( get_the_ID(), '_booking_end', true ),
+                );
+            }
+        }
+        wp_reset_postdata();
 
 
         /**

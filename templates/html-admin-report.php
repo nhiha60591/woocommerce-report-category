@@ -44,7 +44,7 @@
             </p>
             <script type="text/javascript">
                 jQuery(document).ready(function($){
-                    $("#izw-search-key").chosen({width: "100px"});
+                    $("#izw-search-key").chosen({width: "80%"});
                 });
             </script>
         </form>
