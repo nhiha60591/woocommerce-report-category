@@ -14,6 +14,10 @@ if ( ! class_exists( 'WP_List_Table' ) ) {
 }
 class IZW_Report_Data extends WP_List_Table{
 
+    var $view_type = array();
+    var $beds_total = 0;
+    var $received_total = 0;
+    var $outstanding_total = 0;
 
     /** ************************************************************************
      * REQUIRED. Set up a constructor that references the parent constructor. We
@@ -55,6 +59,8 @@ class IZW_Report_Data extends WP_List_Table{
      **************************************************************************/
     function column_default($item, $column_name){
         switch($column_name){
+            case "location":
+                return $item[$column_name];
             default:
                 return print_r($item,true); //Show the whole array for troubleshooting purposes
         }
@@ -133,6 +139,7 @@ class IZW_Report_Data extends WP_List_Table{
             'remaining'         => 'Remaining',
             'start_date'        => 'Start Date',
             'end_date'          => 'End Date',
+            'location'          => 'Locations'
         );
         return $columns;
     }
@@ -218,7 +225,23 @@ class IZW_Report_Data extends WP_List_Table{
             } elseif ( isset( $_GET['izw_search_key'] ) ) {
                 $this->show_categories = array( absint( $_GET['izw_search_key'] ) );
             }
+            if( isset( $_REQUEST['izw_promoter'] ) && $_REQUEST['izw_promoter'] ){
+                $this->view_type[] = 'Promoter';
+                $this->product_ids[] = $_REQUEST['izw_promoter'];
+            }
+            if( isset( $_REQUEST['izw_location'] ) && $_REQUEST['izw_location'] ){
+                $this->view_type[] = 'Location';
+                $location_term = get_term( $_REQUEST['izw_location'], 'location');
+                $product_id = get_objects_in_term( $location_term->term_id, 'location');
+                if (!empty($product_id) && is_array( $product_id ) && sizeof($product_id)) {
+                    foreach ($product_id as $id) {
+                        $this->product_ids[] = $id;
+                    }
+                    $this->product_ids = array_unique($this->product_ids);
+                }
+            }
             if( sizeof( $this->show_categories ) ) {
+                $this->view_type[] = 'Categories';
                 foreach ($this->show_categories as $category) {
                     $category = get_term($category, 'product_cat');
                     $product_id = get_objects_in_term($category->term_id, 'product_cat');
@@ -229,41 +252,51 @@ class IZW_Report_Data extends WP_List_Table{
                         $this->product_ids = array_unique($this->product_ids);
                     }
                 }
-                $booking_args = array(
-                    'post_type' => 'wc_booking',
-                    'posts_per_page' => -1,
-                    'meta_query' => array(
-                        array(
-                            'key' => '_booking_product_id',
-                            'value' => $this->product_ids,
-                            'compare' => 'IN'
-                        )
-                    )
-                );
-            }else{
-                $booking_args = array(
-                    'post_type' => 'wc_booking',
-                    'posts_per_page' => -1,
-                    'meta_query' => array(
-                        array(
-                            'key' => '_booking_product_id',
-                            'value' => array(0),
-                            'compare' => 'IN'
-                        )
-                    )
-                );
+
             }
+            $booking_args = array(
+                'post_type' => 'wc_booking',
+                'posts_per_page' => -1,
+                'meta_query' => array(
+                    array(
+                        'key' => '_booking_product_id',
+                        'value' => $this->product_ids,
+                        'compare' => 'IN'
+                    )
+                )
+            );
+        }
+        if( sizeof( $this->view_type ) < 1 ){
+            $this->view_type = array('All');
         }
         $booking_args = apply_filters( 'izw_report_booking_args', $booking_args, $this );
 
         $bookingdata = new WP_Query( $booking_args );
+        $this->beds_total = $bookingdata->found_posts;
         if ($bookingdata->have_posts()) {
             while ($bookingdata->have_posts()) {
                 $bookingdata->the_post();
                 global $post;
                 $user = get_user_by( 'id', $post->post_author );
                 $product_id = get_post_meta( get_the_ID(), '_booking_product_id', true );
+
                 $productData = new WC_Product( $product_id );
+
+                $order_id = get_post_meta( get_the_ID(), '_booking_order_item_id', true );
+                $paid_price = $remaining_price = 0;
+                $booking = get_wc_booking( get_the_ID() );
+
+                if( $order_id ){
+                    $order = new WC_Order( $order_id );
+                    $paid_price = get_post_meta( $order_id, '_deposit_paid', true );
+                    $remaining_price = (float)$order->get_total() - (float)$paid_price;
+                }else{
+                    $remaining_price = $productData->get_price();
+                }
+
+                /**
+                 * Promoter
+                 */
                 $promoter = wp_get_post_terms( $product_id, 'product_cat');
                 if (is_wp_error($promoter)) {
                     $promoter_string = '<strong>' . $promoter->get_error_message() . '</strong>';
@@ -276,6 +309,21 @@ class IZW_Report_Data extends WP_List_Table{
                 }
                 $promoter_string = apply_filters( 'izw_report_booking_promoter_string', $promoter_string, $promoter, $product_id );
 
+                /**
+                 * Locations
+                 */
+                $locations = wp_get_post_terms( $product_id, 'location');
+                if (is_wp_error($locations)) {
+                    $location_string = '<strong>' . $locations->get_error_message() . '</strong>';
+                }else{
+                    $location_string = '<ul class="list-promoter">';
+                    foreach( $locations as $term){
+                        $location_string .= '<li><strong>'.$term->name.'</strong></li>';
+                    }
+                    $location_string .= '</ul>';
+                }
+                $this->received_total += (int)$productData->get_price();
+                $location_string = apply_filters( 'izw_report_booking_location_string', $location_string, $locations, $product_id );
 
                 $data[] = array(
                     'ID' => get_the_ID(), //Render a checkbox instead of text
@@ -284,10 +332,11 @@ class IZW_Report_Data extends WP_List_Table{
                     'phone' => get_user_meta( $post->post_author, 'billing_phone', true),
                     'promoter' => $promoter_string,
                     'booking_type' => '<a href="'.add_query_arg( array('post' => $product_id, 'action'=> 'edit' ),admin_url('post.php')).'">'. $productData->get_title(). '</a>',
-                    'payments' => $productData->get_price(),
-                    'remaining' => '',
+                    'payments' => $paid_price,
+                    'remaining' => $remaining_price,
                     'start_date' => get_post_meta( get_the_ID(), '_booking_start', true ),
                     'end_date' => get_post_meta( get_the_ID(), '_booking_end', true ),
+                    'location' => $location_string
                 );
             }
         }

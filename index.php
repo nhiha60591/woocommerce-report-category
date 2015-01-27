@@ -25,7 +25,8 @@ if ( ! class_exists( 'IZW_Report' ) ) :
             add_filter( 'woocommerce_reports_charts', array( $this, 'add_report_tab') );
         }
         function init(){
-
+            $this->register_taxonomy();
+            wp_register_style( 'izw-report-style', plugins_url( 'assets/admin/style.css', __FILE__ ) );
         }
         function defines(){
             define( '__TEXTDOMAIN__', 'izweb-report-category' );
@@ -49,8 +50,36 @@ if ( ! class_exists( 'IZW_Report' ) ) :
             wp_enqueue_script( 'chosen' );
             wp_enqueue_script( 'wc-chosen' );
             wp_enqueue_style( 'woocommerce_chosen_styles', $assets_path . 'css/chosen.css' );
+            wp_enqueue_style( 'izw-report-style' );
             include("includes/class-list-report-data.php");
             include("templates/html-admin-report.php");
+        }
+        function register_taxonomy(){
+            // Add new taxonomy, make it hierarchical (like categories)
+            $labels = array(
+                'name'              => _x( 'Locations', 'taxonomy general name' ),
+                'singular_name'     => _x( 'Location', 'taxonomy singular name' ),
+                'search_items'      => __( 'Search Locations' ),
+                'all_items'         => __( 'All Locations' ),
+                'parent_item'       => __( 'Parent Location' ),
+                'parent_item_colon' => __( 'Parent Location:' ),
+                'edit_item'         => __( 'Edit Location' ),
+                'update_item'       => __( 'Update Location' ),
+                'add_new_item'      => __( 'Add New Location' ),
+                'new_item_name'     => __( 'New Location Name' ),
+                'menu_name'         => __( 'Locations' ),
+            );
+
+            $args = array(
+                'hierarchical'      => true,
+                'labels'            => $labels,
+                'show_ui'           => true,
+                'show_admin_column' => true,
+                'query_var'         => true,
+                'rewrite'           => array( 'slug' => 'location' ),
+            );
+
+            register_taxonomy( 'location', array( 'product' ), $args );
         }
     }
     new IZW_Report();
