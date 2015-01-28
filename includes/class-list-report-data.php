@@ -272,7 +272,6 @@ class IZW_Report_Data extends WP_List_Table{
         $booking_args = apply_filters( 'izw_report_booking_args', $booking_args, $this );
 
         $bookingdata = new WP_Query( $booking_args );
-        $this->beds_total = $bookingdata->found_posts;
         if ($bookingdata->have_posts()) {
             while ($bookingdata->have_posts()) {
                 $bookingdata->the_post();
@@ -283,16 +282,22 @@ class IZW_Report_Data extends WP_List_Table{
                 $productData = new WC_Product( $product_id );
 
                 $order_id = get_post_meta( get_the_ID(), '_booking_order_item_id', true );
-                $paid_price = $remaining_price = 0;
                 $booking = get_wc_booking( get_the_ID() );
+                $resource = $booking->get_resource();
+                $bed = explode(" ", $resource->post_title);
+                $bed_size = absint( $bed[0]) ? $bed[0] : 0;
+                $this->beds_total += (int)$bed_size;
 
                 if( $order_id ){
-                    $order = new WC_Order( $order_id );
+                    $order              = new WC_Order( $order_id );
                     $paid_price = get_post_meta( $order_id, '_deposit_paid', true );
-                    $remaining_price = (float)$order->get_total() - (float)$paid_price;
+                    $remaining_price = (float)$order->order_total - (float)$paid_price;
                 }else{
-                    $remaining_price = $productData->get_price();
+                    $remaining_price    = $productData->get_price();
+                    $paid_price = 0;
                 }
+                $this->outstanding_total += (float)$remaining_price;
+                $this->received_total += (float)$paid_price;
 
                 /**
                  * Promoter
@@ -312,7 +317,7 @@ class IZW_Report_Data extends WP_List_Table{
                 /**
                  * Locations
                  */
-                $locations = wp_get_post_terms( $product_id, 'location');
+                $locations = wp_get_post_terms( $product_id, 'location' );
                 if (is_wp_error($locations)) {
                     $location_string = '<strong>' . $locations->get_error_message() . '</strong>';
                 }else{
@@ -322,7 +327,6 @@ class IZW_Report_Data extends WP_List_Table{
                     }
                     $location_string .= '</ul>';
                 }
-                $this->received_total += (int)$productData->get_price();
                 $location_string = apply_filters( 'izw_report_booking_location_string', $location_string, $locations, $product_id );
 
                 $data[] = array(

@@ -20,7 +20,7 @@
         </div><!-- END .izw-column -->
         <div class="izw-column">
             <div class="izw-dropdown">
-                <select name="izw_promoter">
+                <select name="izw_promoter" style="width: 49%;">
                     <option value="">Select Promoter</option>
                     <?php
                     $bookable_products = array( '' => __( 'N/A', 'woocommerce-bookings' ) );
@@ -46,7 +46,7 @@
                     }
                     ?>
                 </select>
-                <select name="izw_location">
+                <select name="izw_location" style="width: 49%;">
                     <option value="">Select Location</option>
                     <?php
                     $args = array(
