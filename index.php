@@ -27,6 +27,7 @@ if ( ! class_exists( 'IZW_Report' ) ) :
         function init(){
             $this->register_taxonomy();
             wp_register_style( 'izw-report-style', plugins_url( 'assets/admin/style.css', __FILE__ ) );
+            wp_register_script( 'izw-report-script', plugins_url( 'assets/admin/js/admin.js', __FILE__ ) );
         }
         function defines(){
             define( '__TEXTDOMAIN__', 'izweb-report-category' );
@@ -49,6 +50,7 @@ if ( ! class_exists( 'IZW_Report' ) ) :
             $assets_path          = str_replace( array( 'http:', 'https:' ), '', WC()->plugin_url() ) . '/assets/';
             wp_enqueue_script( 'chosen' );
             wp_enqueue_script( 'wc-chosen' );
+            wp_enqueue_script( 'izw-report-script' );
             wp_enqueue_style( 'woocommerce_chosen_styles', $assets_path . 'css/chosen.css' );
             wp_enqueue_style( 'izw-report-style' );
             include("includes/class-list-report-data.php");

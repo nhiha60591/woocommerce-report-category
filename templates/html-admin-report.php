@@ -3,8 +3,12 @@
     <?php
         $listdata = new IZW_Report_Data();
         $listdata->prepare_items();
+        $prompter_selected = isset( $_REQUEST['izw_promoter']) ? $_REQUEST['izw_promoter'] : '';
+        $location_selected = isset( $_REQUEST['izw_location']) ? $_REQUEST['izw_location'] : '';
     ?>
     <form name="izw-search-box" action="" method="get">
+        <input type="hidden" name="page" value="<?php echo $_REQUEST['page']; ?>"/>
+        <input type="hidden" name="tab" value="<?php echo $_REQUEST['tab']; ?>"/>
     <div class="izw-row" id="izw-row">
         <div class="izw-column">
             <div class="izw-information">
@@ -20,34 +24,47 @@
         </div><!-- END .izw-column -->
         <div class="izw-column">
             <div class="izw-dropdown">
-                <select name="izw_promoter" style="width: 49%;">
-                    <option value="">Select Promoter</option>
-                    <?php
-                    $bookable_products = array( '' => __( 'N/A', 'woocommerce-bookings' ) );
-                    $promoterargs = array(
-                        'post_type' => 'product',
-                        'posts_per_page' => -1,
-                        'tax_query'      => array(
-                            array(
-                                'taxonomy' => 'product_type',
-                                'field'    => 'slug',
-                                'terms'    => 'booking'
-                            )
-                        ),
-                    );
-                    $promoter = new WP_Query( $promoterargs );
-                    if( $promoter->have_posts() ){
-                        while( $promoter->have_posts() ):
-                            $promoter->the_post();
-                        ?>
-                            <option value="<?php the_ID(); ?>"><?php the_title(); ?></option>
+                <div class="izw-promoter-box" style="display: inline;">
+                    <select name="izw_promoter[]" multiple id="izw-promoter" data-placeholder="Select Promoter" style="width: 49%;">
                         <?php
-                        endwhile;
-                    }
-                    ?>
-                </select>
-                <select name="izw_location" style="width: 49%;">
-                    <option value="">Select Location</option>
+                        $args = array(
+                            'orderby' => 'name',
+                            'order' => 'ASC',
+                            'hide_empty' => false,
+                            'exclude' => array(),
+                            'exclude_tree' => array(),
+                            'include' => array(),
+                            'number' => '',
+                            'fields' => 'all',
+                            'slug' => '',
+                            'name' => '',
+                            'parent' => '',
+                            'hierarchical' => true,
+                            'child_of' => 0,
+                            'get' => '',
+                            'name__like' => '',
+                            'description__like' => '',
+                            'pad_counts' => false,
+                            'offset' => '',
+                            'search' => '',
+                            'cache_domain' => 'core'
+                        );
+
+                        $terms = get_terms('product_cat', $args);
+                        if (!empty($terms) && !is_wp_error($terms)) {
+                            foreach ($terms as $term) {
+                                ?>
+                                <option <?php selected( $term->term_id, $prompter_selected ); ?> value="<?php echo $term->term_id; ?>"><?php echo $term->name; ?></option>
+                            <?php
+                            }
+                        }
+                        ?>
+                    </select>
+                    <a href="#" class="izw-pro-all">All</a> |
+                    <a href="#" class="izw-pro-none">None</a>
+                </div>
+                <select name="izw_location" id="izw-location" data-placeholder="Select Location" style="width: 49%;">
+                    <option value="0">Select Location</option>
                     <?php
                     $args = array(
                         'orderby' => 'name',
@@ -76,22 +93,23 @@
                     if (!empty($terms) && !is_wp_error($terms)) {
                         foreach ($terms as $term) {
                             ?>
-                            <option value="<?php echo $term->term_id; ?>"><?php echo $term->name; ?></option>
+                            <option <?php selected( $term->term_id, $location_selected ); ?> value="<?php echo $term->term_id; ?>"><?php echo $term->name; ?></option>
                         <?php
                         }
                     }
                     ?>
                 </select>
             </div>
+            <input type="submit" name="izw_search" class="button button-primary" value="Search"/>
         </div><!-- END .izw-column -->
-        <div class="izw-column">
+        <!--<div class="izw-column">
             <div class="izw-search-box">
-                    <input type="hidden" name="page" value="<?php echo $_REQUEST['page']; ?>"/>
-                    <input type="hidden" name="tab" value="<?php echo $_REQUEST['tab']; ?>"/>
+                    <input type="hidden" name="page" value="<?php /*echo $_REQUEST['page']; */?>"/>
+                    <input type="hidden" name="tab" value="<?php /*echo $_REQUEST['tab']; */?>"/>
                     <p>
                         <select name="izw_search_key[]" multiple id="izw-search-key" data-placeholder="Select Categories">
                             <?php
-                            $args = array(
+/*                            $args = array(
                                 'orderby' => 'name',
                                 'order' => 'ASC',
                                 'hide_empty' => false,
@@ -117,12 +135,12 @@
                             $terms = get_terms('product_cat', $args);
                             if (!empty($terms) && !is_wp_error($terms)) {
                                 foreach ($terms as $term) {
-                                    ?>
-                                    <option value="<?php echo $term->term_id; ?>"><?php echo $term->name; ?></option>
+                                    */?>
+                                    <option value="<?php /*echo $term->term_id; */?>"><?php /*echo $term->name; */?></option>
                                 <?php
-                                }
+/*                                }
                             }
-                            ?>
+                            */?>
                         </select>
                         <input type="submit" name="izw_search" class="button button-primary" value="Search"/>
                     </p>
@@ -132,8 +150,25 @@
                         });
                     </script>
             </div><!-- END .izw-search-box -->
-        </div><!-- END .izw-column -->
+        <!--</div><!-- END .izw-column -->
     </div><!-- END .izw-row -->
+        <script type="text/javascript">
+            jQuery(document).ready(function ($) {
+                $("#izw-promoter").chosen({width: "34%"});
+                $("#izw-location").chosen({width: "45%"});
+            });
+        </script>
+        <style type="text/css">
+            .izw-search-data table.wp-list-table .column-name{
+                width: 11%;
+            }
+            .izw-search-data table.wp-list-table #promoter{
+                width: 11%;
+            }
+            .izw-search-data table.wp-list-table #booking_type{
+                width: 20%;
+            }
+        </style>
     </form>
     <div class="izw-search-data">
         <?php

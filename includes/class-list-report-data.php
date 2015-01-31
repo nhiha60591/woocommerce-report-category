@@ -216,43 +216,61 @@ class IZW_Report_Data extends WP_List_Table{
         $data = array();
         $booking_args = array(
             'post_type' => 'wc_booking',
-            'posts_per_page' => -1
+            'posts_per_page' => -1,
         );
         if( isset( $_REQUEST['izw_search'])){
             $this->product_ids = array();
-            if ( isset( $_GET['izw_search_key'] ) && is_array( $_GET['izw_search_key'] ) ) {
-                $this->show_categories = array_map( 'absint', $_GET['izw_search_key'] );
+            /*if ( isset( $_REQUEST['izw_search_key'] ) && is_array( $_REQUEST['izw_search_key'] ) ) {
+                $this->show_categories = array_map( 'absint', $_REQUEST['izw_search_key'] );
             } elseif ( isset( $_GET['izw_search_key'] ) ) {
                 $this->show_categories = array( absint( $_GET['izw_search_key'] ) );
-            }
-            if( isset( $_REQUEST['izw_promoter'] ) && $_REQUEST['izw_promoter'] ){
+            }*/
+            $checkPromoter = false;
+            if( isset( $_REQUEST['izw_promoter'] ) && !empty( $_REQUEST['izw_promoter'] ) ){
+                $checkPromoter = true;
                 $this->view_type[] = 'Promoter';
-                $this->product_ids[] = $_REQUEST['izw_promoter'];
-            }
-            if( isset( $_REQUEST['izw_location'] ) && $_REQUEST['izw_location'] ){
-                $this->view_type[] = 'Location';
-                $location_term = get_term( $_REQUEST['izw_location'], 'location');
-                $product_id = get_objects_in_term( $location_term->term_id, 'location');
-                if (!empty($product_id) && is_array( $product_id ) && sizeof($product_id)) {
-                    foreach ($product_id as $id) {
-                        $this->product_ids[] = $id;
-                    }
-                    $this->product_ids = array_unique($this->product_ids);
+                if( is_array( $_REQUEST['izw_promoter'] ) ){
+                    $this->show_categories = array_map( 'absint', $_REQUEST['izw_promoter'] );
+                }else{
+                    $this->show_categories = array( absint( $_REQUEST['izw_promoter'] ) );
                 }
-            }
-            if( sizeof( $this->show_categories ) ) {
-                $this->view_type[] = 'Categories';
-                foreach ($this->show_categories as $category) {
-                    $category = get_term($category, 'product_cat');
+                foreach( $this->show_categories as $cat ){
+                    $category = get_term( $cat, 'product_cat');
                     $product_id = get_objects_in_term($category->term_id, 'product_cat');
                     if (!empty($product_id) && is_array($product_id) && sizeof($product_id)) {
                         foreach ($product_id as $id) {
                             $this->product_ids[] = $id;
                         }
-                        $this->product_ids = array_unique($this->product_ids);
                     }
                 }
-
+                $this->product_ids = array_unique($this->product_ids);
+            }
+            $productids = array();
+            $checkLocation = false;
+            if( isset( $_REQUEST['izw_location'] ) && $_REQUEST['izw_location'] != '0' ){
+                $checkLocation = true;
+                $this->view_type[] = 'Location';
+                $location_term = get_term( $_REQUEST['izw_location'], 'location');
+                $product_id = get_objects_in_term( $location_term->term_id, 'location');
+                if (!empty($product_id) && is_array( $product_id ) && sizeof($product_id)) {
+                    foreach ($product_id as $id) {
+                        $productids[] = $id;
+                    }
+                }
+            }
+            if( sizeof( $this->product_ids ) ){
+                if( $checkLocation ){
+                    $this->product_ids = array_values( array_intersect( $productids, $this->product_ids ) );
+                }
+                if( $checkLocation && $checkPromoter && (sizeof( $productids ) <= 0 ) ){
+                    $this->product_ids = array(0);
+                }
+            }elseif( sizeof( $this->product_ids ) <= 0 ){
+                if( sizeof( $productids ) > 0 ){
+                    $this->product_ids = $productids;
+                }elseif( $checkLocation || $checkPromoter ){
+                    $this->product_ids = array( 0 );
+                }
             }
             $booking_args = array(
                 'post_type' => 'wc_booking',
@@ -276,26 +294,26 @@ class IZW_Report_Data extends WP_List_Table{
             while ($bookingdata->have_posts()) {
                 $bookingdata->the_post();
                 global $post;
+                $WC_Booking = new WC_Booking( get_the_ID() );
                 $user = get_user_by( 'id', $post->post_author );
                 $product_id = get_post_meta( get_the_ID(), '_booking_product_id', true );
 
                 $productData = new WC_Product( $product_id );
 
-                $order_id = get_post_meta( get_the_ID(), '_booking_order_item_id', true );
                 $booking = get_wc_booking( get_the_ID() );
                 $resource = $booking->get_resource();
                 $bed = explode(" ", $resource->post_title);
                 $bed_size = absint( $bed[0]) ? $bed[0] : 0;
                 $this->beds_total += (int)$bed_size;
 
-                if( $order_id ){
-                    $order              = new WC_Order( $order_id );
-                    $paid_price = get_post_meta( $order_id, '_deposit_paid', true );
-                    $remaining_price = (float)$order->order_total - (float)$paid_price;
+                $paid_price = get_post_meta( $WC_Booking->get_order()->id, '_deposit_paid', true );
+                if( (float)$WC_Booking->get_order()->get_total() >= (float)$paid_price ){
+                    $remaining_price = (float)$WC_Booking->get_order()->get_total() - (float)$paid_price;
                 }else{
-                    $remaining_price    = $productData->get_price();
-                    $paid_price = 0;
+                    $remaining_price = $WC_Booking->get_order()->get_total();
                 }
+
+
                 $this->outstanding_total += (float)$remaining_price;
                 $this->received_total += (float)$paid_price;
 
@@ -306,11 +324,11 @@ class IZW_Report_Data extends WP_List_Table{
                 if (is_wp_error($promoter)) {
                     $promoter_string = '<strong>' . $promoter->get_error_message() . '</strong>';
                 }else{
-                    $promoter_string = '<ul class="list-promoter">';
+                    $promoter_string = '';
                     foreach( $promoter as $term){
-                        $promoter_string .= '<li><a href="'.add_query_arg( array('action' => 'edit', 'taxonomy'=> 'product_cat', 'tag_ID' => $term->term_id, 'post_type'=>'product' ),admin_url('edit-tags.php')).'"><strong>'.$term->name.'</strong></a></li>';
+                        $promoter_string .= '<a href="'.add_query_arg( array('action' => 'edit', 'taxonomy'=> 'product_cat', 'tag_ID' => $term->term_id, 'post_type'=>'product' ),admin_url('edit-tags.php')).'"><strong>'.$term->name.'</strong></a><br />';
                     }
-                    $promoter_string .= '</ul>';
+                    //$promoter_string .= '</ul>';
                 }
                 $promoter_string = apply_filters( 'izw_report_booking_promoter_string', $promoter_string, $promoter, $product_id );
 
