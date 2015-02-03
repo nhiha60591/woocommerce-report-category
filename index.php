@@ -19,19 +19,37 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 if ( ! class_exists( 'IZW_Report' ) ) :
     class IZW_Report{
+        /**
+         * Construct Class
+         */
         function __construct(){
             $this->defines();
             add_action( 'init', array( $this, 'init') );
             add_filter( 'woocommerce_reports_charts', array( $this, 'add_report_tab') );
         }
+
+        /**
+         * Set Init Function
+         */
         function init(){
             $this->register_taxonomy();
             wp_register_style( 'izw-report-style', plugins_url( 'assets/admin/style.css', __FILE__ ) );
             wp_register_script( 'izw-report-script', plugins_url( 'assets/admin/js/admin.js', __FILE__ ) );
         }
+
+        /**
+         * Define Constant
+         */
         function defines(){
             define( '__TEXTDOMAIN__', 'izweb-report-category' );
         }
+
+        /**
+         * Add Report Tab
+         *
+         * @param $reports
+         * @return mixed
+         */
         function add_report_tab( $reports ){
             $reports['category'] = array(
                 'title'  => __( 'Sale by Categories', 'woocommerce' ),
@@ -46,6 +64,10 @@ if ( ! class_exists( 'IZW_Report' ) ) :
             );
             return $reports;
         }
+
+        /**
+         * Load Report List Page
+         */
         function get_report(){
             $assets_path          = str_replace( array( 'http:', 'https:' ), '', WC()->plugin_url() ) . '/assets/';
             wp_enqueue_script( 'chosen' );
@@ -56,6 +78,10 @@ if ( ! class_exists( 'IZW_Report' ) ) :
             include("includes/class-list-report-data.php");
             include("templates/html-admin-report.php");
         }
+
+        /**
+         * Register Taxonomy
+         */
         function register_taxonomy(){
             // Add new taxonomy, make it hierarchical (like categories)
             $labels = array(

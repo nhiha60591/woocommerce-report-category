@@ -300,60 +300,72 @@ class IZW_Report_Data extends WP_List_Table{
 
                 $productData = new WC_Product( $product_id );
 
-                $booking = get_wc_booking( get_the_ID() );
-                $resource = $booking->get_resource();
-                $bed = explode(" ", $resource->post_title);
-                $bed_size = absint( $bed[0]) ? $bed[0] : 0;
-                $this->beds_total += (int)$bed_size;
+                $promoter_string = $location_string = $booking_string = '';
+                foreach( $WC_Booking->get_order()->get_items() as $item){
 
+                    /**
+                     * Calculator Bed Room
+                     */
+                    $roomLabel = get_post_meta( $item['product_id'], '_wc_booking_resouce_label', true );
+                    $bed = explode(" ", $item[$roomLabel]);
+                    $bed_size = absint( $bed[0] ) ? $bed[0] : 0;
+                    $this->beds_total += (int)$bed_size;
+
+                    /**
+                     * List Promoter
+                     */
+                    $promoter = wp_get_post_terms( $item['product_id'], 'product_cat');
+                    if (!is_wp_error($promoter)) {
+                        $promoter_string = '';
+                        foreach( $promoter as $term){
+                            $promoter_string .= '<a href="'.add_query_arg( array('action' => 'edit', 'taxonomy'=> 'product_cat', 'tag_ID' => $term->term_id, 'post_type'=>'product' ),admin_url('edit-tags.php')).'"><strong>'.$term->name.'</strong></a><br />';
+                        }
+                    }
+
+                    /**
+                     * List Locations
+                     */
+                    $locations = wp_get_post_terms( $item['product_id'], 'location' );
+                    if (!is_wp_error($locations)) {
+                        foreach( $locations as $term){
+                            $location_string .= '<strong>'.$term->name.'</strong><br />';
+                        }
+                    }
+
+                    /**
+                     * List Booking Types
+                     */
+                    $booking_string .= '<a href="'.add_query_arg( array('post' => $item['product_id'], 'action'=> 'edit' ),admin_url('post.php')).'">'. get_the_title( $item['product_id'] ). '</a><br />';
+                }
+
+                /**
+                 * Filter to change Promoter and Location string
+                 */
+                $promoter_string = apply_filters( 'izw_report_booking_promoter_string', $promoter_string, $WC_Booking );
+                $location_string = apply_filters( 'izw_report_booking_location_string', $location_string, $WC_Booking );
+
+                /**
+                 * Get Paid and Remaining Price
+                 */
                 $paid_price = get_post_meta( $WC_Booking->get_order()->id, '_deposit_paid', true );
                 if( (float)$WC_Booking->get_order()->get_total() >= (float)$paid_price ){
                     $remaining_price = (float)$WC_Booking->get_order()->get_total() - (float)$paid_price;
                 }else{
                     $remaining_price = $WC_Booking->get_order()->get_total();
                 }
-
-
                 $this->outstanding_total += (float)$remaining_price;
                 $this->received_total += (float)$paid_price;
 
                 /**
-                 * Promoter
+                 * Set Data for list table
                  */
-                $promoter = wp_get_post_terms( $product_id, 'product_cat');
-                if (is_wp_error($promoter)) {
-                    $promoter_string = '<strong>' . $promoter->get_error_message() . '</strong>';
-                }else{
-                    $promoter_string = '';
-                    foreach( $promoter as $term){
-                        $promoter_string .= '<a href="'.add_query_arg( array('action' => 'edit', 'taxonomy'=> 'product_cat', 'tag_ID' => $term->term_id, 'post_type'=>'product' ),admin_url('edit-tags.php')).'"><strong>'.$term->name.'</strong></a><br />';
-                    }
-                    //$promoter_string .= '</ul>';
-                }
-                $promoter_string = apply_filters( 'izw_report_booking_promoter_string', $promoter_string, $promoter, $product_id );
-
-                /**
-                 * Locations
-                 */
-                $locations = wp_get_post_terms( $product_id, 'location' );
-                if (is_wp_error($locations)) {
-                    $location_string = '<strong>' . $locations->get_error_message() . '</strong>';
-                }else{
-                    $location_string = '<ul class="list-promoter">';
-                    foreach( $locations as $term){
-                        $location_string .= '<li><strong>'.$term->name.'</strong></li>';
-                    }
-                    $location_string .= '</ul>';
-                }
-                $location_string = apply_filters( 'izw_report_booking_location_string', $location_string, $locations, $product_id );
-
                 $data[] = array(
                     'ID' => get_the_ID(), //Render a checkbox instead of text
                     'name' => '<a href="'.add_query_arg( array( 'user_id' => $post->post_author ), admin_url('user-edit.php') ).'"><strong>'. $user->first_name . " " . $user->last_name. '</strong></a>',
                     'email' => $user->user_email,
                     'phone' => get_user_meta( $post->post_author, 'billing_phone', true),
                     'promoter' => $promoter_string,
-                    'booking_type' => '<a href="'.add_query_arg( array('post' => $product_id, 'action'=> 'edit' ),admin_url('post.php')).'">'. $productData->get_title(). '</a>',
+                    'booking_type' => $booking_string,
                     'payments' => $paid_price,
                     'remaining' => $remaining_price,
                     'start_date' => get_post_meta( get_the_ID(), '_booking_start', true ),
