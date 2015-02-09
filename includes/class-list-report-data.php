@@ -216,6 +216,7 @@ class IZW_Report_Data extends WP_List_Table{
         $data = array();
         $booking_args = array(
             'post_type' => 'wc_booking',
+            'post_status' => 'paid',
             'posts_per_page' => -1,
         );
         if( isset( $_REQUEST['izw_search'])){
@@ -275,6 +276,7 @@ class IZW_Report_Data extends WP_List_Table{
             $booking_args = array(
                 'post_type' => 'wc_booking',
                 'posts_per_page' => -1,
+                'post_status' => 'paid',
                 'meta_query' => array(
                     array(
                         'key' => '_booking_product_id',
@@ -296,9 +298,6 @@ class IZW_Report_Data extends WP_List_Table{
                 global $post;
                 $WC_Booking = new WC_Booking( get_the_ID() );
                 $user = get_user_by( 'id', $post->post_author );
-                $product_id = get_post_meta( get_the_ID(), '_booking_product_id', true );
-
-                $productData = new WC_Product( $product_id );
 
                 $promoter_string = $location_string = $booking_string = '';
                 foreach( $WC_Booking->get_order()->get_items() as $item){
@@ -386,8 +385,8 @@ class IZW_Report_Data extends WP_List_Table{
          * sorting technique would be unnecessary.
          */
         function usort_reorder($a,$b){
-            $orderby = (!empty($_REQUEST['orderby'])) ? $_REQUEST['orderby'] : 'title'; //If no sort, default to title
-            $order = (!empty($_REQUEST['order'])) ? $_REQUEST['order'] : 'asc'; //If no order, default to asc
+            $orderby = (!empty($_REQUEST['orderby'])) ? $_REQUEST['orderby'] : 'ID'; //If no sort, default to title
+            $order = (!empty($_REQUEST['order'])) ? $_REQUEST['order'] : 'DESC'; //If no order, default to asc
             $result = strcmp($a[$orderby], $b[$orderby]); //Determine sort order
             return ($order==='asc') ? $result : -$result; //Send final sort direction to usort
         }
