@@ -26,6 +26,8 @@ if ( ! class_exists( 'IZW_Report' ) ) :
             $this->defines();
             add_action( 'init', array( $this, 'init') );
             add_filter( 'woocommerce_reports_charts', array( $this, 'add_report_tab') );
+            //Change deposits
+            add_filter('woocommerce_add_cart_item', array( $this, 'add_cart_item' ), 20, 2 );
         }
 
         /**
@@ -108,6 +110,64 @@ if ( ! class_exists( 'IZW_Report' ) ) :
             );
 
             register_taxonomy( 'location', array( 'product' ), $args );
+        }
+        function update_deposit_meta($product, $quantity, &$cart_item_data)
+        {
+            if ($product->wc_deposits_enable_deposit === 'yes' && isset($cart_item_data['deposit']) &&
+                $cart_item_data['deposit']['enable'] === 'yes')
+            {
+                $deposit_amount = $product->wc_deposits_deposit_amount;
+                $deposit = $deposit_amount;
+
+                if ($product->is_type('booking')) {
+                    $amount = $cart_item_data['booking']['_cost'];
+                    if ($product->has_persons() && $product->wc_deposits_enable_per_person == 'yes')
+                    {
+                        $persons = array_sum($cart_item_data['booking']['_persons']);
+                        if ($product->wc_deposits_amount_type === 'fixed') {
+                            $deposit = $deposit_amount * $persons;
+                        } else { // percent
+                            $deposit = $deposit_amount / 100.0 * $amount;
+                        }
+                    } else {
+                        if ($product->wc_deposits_amount_type === 'percent') {
+                            $deposit = $deposit_amount / 100.0 * $amount;
+                        }
+                    }
+                } else {
+                    if ($product->is_type('variable')) {
+                        $amount = $cart_item_data['line_subtotal'];
+                    } else {
+                        $amount = $product->get_price_excluding_tax($quantity);
+                    }
+                    if ($product->wc_deposits_amount_type === 'fixed') {
+                        $deposit = $deposit * $quantity;
+                    } else {
+                        $deposit = $amount * ($deposit_amount / 100.0);
+                    }
+                }
+
+                if ($deposit < $amount && $deposit > 0) {
+                    $cart_item_data['deposit']['deposit'] = $deposit;
+                    $cart_item_data['deposit']['remaining'] = $amount - $deposit;
+                    $cart_item_data['deposit']['total'] = $amount;
+                } else {
+                    $cart_item_data['deposit']['enable'] = 'no';
+                }
+            }
+        }
+        function add_cart_item($cart_item, $cart_item_key)
+        {
+            $product = wc_get_product( $cart_item['product_id']);
+
+            if ($product->wc_deposits_enable_deposit === 'yes' && !empty($cart_item['deposit']) && $cart_item['deposit']['enable'] === 'yes')
+            {
+                $this->update_deposit_meta($product, $cart_item['quantity'], $cart_item);
+                echo $product->wc_deposits_enable_per_person;
+                die();
+            }
+
+            return $cart_item;
         }
     }
     new IZW_Report();
